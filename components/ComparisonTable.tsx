@@ -209,7 +209,7 @@ export default function ComparisonTable({ stocks, colors, highlightBest = false 
                       <td
                         key={i}
                         className={`py-1.5 px-3 text-right font-medium ${v.className ?? "text-gray-200"} ${
-                          isBest ? "bg-emerald-500/10 text-emerald-400 rounded" : ""
+                          isBest ? "bg-amber-500/10 text-amber-400 rounded" : ""
                         }`}
                       >
                         {v.text}

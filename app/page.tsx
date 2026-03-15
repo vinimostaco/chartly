@@ -203,16 +203,11 @@ export default function Home() {
                     onClick={() => setHighlightBest((p) => !p)}
                     className={`flex items-center gap-2 rounded-md border px-3 py-1.5 text-xs font-medium transition ${
                       highlightBest
-                        ? "border-emerald-600 bg-emerald-500/15 text-emerald-400"
+                        ? "border-amber-600 bg-amber-500/15 text-amber-400"
                         : "border-gray-700 bg-gray-800 text-gray-400 hover:text-gray-300"
                     }`}
                   >
-                    <span
-                      className={`inline-block h-2 w-2 rounded-full transition ${
-                        highlightBest ? "bg-emerald-400" : "bg-gray-600"
-                      }`}
-                    />
-                    Highlight Best
+                    🏆 Highlight Best
                   </button>
                 </div>
                 <ComparisonTable
