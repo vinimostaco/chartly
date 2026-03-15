@@ -35,6 +35,7 @@ export default function Home() {
   const [stocksMap, setStocksMap] = useState<Map<string, StockData>>(new Map());
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [highlightBest, setHighlightBest] = useState(false);
 
   // Fetch data for all tickers
   useEffect(() => {
@@ -197,13 +198,32 @@ export default function Home() {
             {/* Comparison mode */}
             {isComparing && (
               <>
+                <div className="mt-6 flex items-center justify-end">
+                  <button
+                    onClick={() => setHighlightBest((p) => !p)}
+                    className={`flex items-center gap-2 rounded-md border px-3 py-1.5 text-xs font-medium transition ${
+                      highlightBest
+                        ? "border-emerald-600 bg-emerald-500/15 text-emerald-400"
+                        : "border-gray-700 bg-gray-800 text-gray-400 hover:text-gray-300"
+                    }`}
+                  >
+                    <span
+                      className={`inline-block h-2 w-2 rounded-full transition ${
+                        highlightBest ? "bg-emerald-400" : "bg-gray-600"
+                      }`}
+                    />
+                    Highlight Best
+                  </button>
+                </div>
                 <ComparisonTable
                   stocks={stocks}
                   colors={stocks.map((_, i) => SERIES_COLORS[i % SERIES_COLORS.length])}
+                  highlightBest={highlightBest}
                 />
                 <FinancialComparisonTable
                   stocks={stocks}
                   colors={stocks.map((_, i) => SERIES_COLORS[i % SERIES_COLORS.length])}
+                  highlightBest={highlightBest}
                 />
               </>
             )}

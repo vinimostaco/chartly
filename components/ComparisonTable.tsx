@@ -5,6 +5,7 @@ import { StockData } from "@/types/finance";
 interface ComparisonTableProps {
   stocks: StockData[];
   colors: string[];
+  highlightBest?: boolean;
 }
 
 function fmt(n: number | null | undefined, currency: string): string {
@@ -29,12 +30,45 @@ function num(n: number | null | undefined, d = 2): string {
   return n.toFixed(d);
 }
 
-export default function ComparisonTable({ stocks, colors }: ComparisonTableProps) {
+function getBestIndices(
+  rawValues: (number | null | undefined)[],
+  higherIsBetter: boolean
+): Set<number> {
+  const best = new Set<number>();
+  let bestVal: number | null = null;
+
+  for (let i = 0; i < rawValues.length; i++) {
+    const v = rawValues[i];
+    if (v === null || v === undefined) continue;
+    if (bestVal === null) {
+      bestVal = v;
+      best.clear();
+      best.add(i);
+    } else if (v === bestVal) {
+      best.add(i);
+    } else if (higherIsBetter ? v > bestVal : v < bestVal) {
+      bestVal = v;
+      best.clear();
+      best.add(i);
+    }
+  }
+
+  return best;
+}
+
+interface RowDef {
+  label: string;
+  values: { text: string; className?: string }[];
+  rawValues: (number | null | undefined)[];
+  higherIsBetter: boolean;
+}
+
+export default function ComparisonTable({ stocks, colors, highlightBest = false }: ComparisonTableProps) {
   if (stocks.length < 2) return null;
 
-  const rows: { label: string; values: { text: string; className?: string }[] }[] = [];
+  const rows: RowDef[] = [];
 
-  // Price info
+  // Price info — no highlight (neutral)
   rows.push({
     label: "Current Price",
     values: stocks.map((s) => {
@@ -43,6 +77,11 @@ export default function ComparisonTable({ stocks, colors }: ComparisonTableProps
       const latest = s.historical[s.historical.length - 1];
       return { text: latest ? `${sym}${latest.close.toFixed(2)}` : "—" };
     }),
+    rawValues: stocks.map((s) => {
+      const latest = s.historical[s.historical.length - 1];
+      return latest?.close ?? null;
+    }),
+    higherIsBetter: true,
   });
 
   rows.push({
@@ -57,24 +96,36 @@ export default function ComparisonTable({ stocks, colors }: ComparisonTableProps
         className: change >= 0 ? "text-green-400" : "text-red-400",
       };
     }),
+    rawValues: stocks.map((s) => {
+      if (s.historical.length < 2) return null;
+      const first = s.historical[0].close;
+      const last = s.historical[s.historical.length - 1].close;
+      return ((last - first) / first) * 100;
+    }),
+    higherIsBetter: true,
   });
 
-  // Fundamentals
   rows.push({
     label: "Market Cap",
     values: stocks.map((s) => ({
       text: fmt(s.fundamentals?.marketCap, s.fundamentals?.currency ?? "USD"),
     })),
+    rawValues: stocks.map((s) => s.fundamentals?.marketCap ?? null),
+    higherIsBetter: true,
   });
 
   rows.push({
     label: "P/E (TTM)",
     values: stocks.map((s) => ({ text: num(s.fundamentals?.trailingPE) })),
+    rawValues: stocks.map((s) => s.fundamentals?.trailingPE ?? null),
+    higherIsBetter: false,
   });
 
   rows.push({
     label: "EPS (TTM)",
     values: stocks.map((s) => ({ text: num(s.fundamentals?.trailingEPS) })),
+    rawValues: stocks.map((s) => s.fundamentals?.trailingEPS ?? null),
+    higherIsBetter: true,
   });
 
   rows.push({
@@ -82,6 +133,8 @@ export default function ComparisonTable({ stocks, colors }: ComparisonTableProps
     values: stocks.map((s) => ({
       text: fmt(s.fundamentals?.totalRevenue, s.fundamentals?.currency ?? "USD"),
     })),
+    rawValues: stocks.map((s) => s.fundamentals?.totalRevenue ?? null),
+    higherIsBetter: true,
   });
 
   rows.push({
@@ -93,11 +146,15 @@ export default function ComparisonTable({ stocks, colors }: ComparisonTableProps
         className: ni !== null && ni !== undefined && ni < 0 ? "text-red-400" : undefined,
       };
     }),
+    rawValues: stocks.map((s) => s.fundamentals?.netIncome ?? null),
+    higherIsBetter: true,
   });
 
   rows.push({
     label: "Profit Margin",
     values: stocks.map((s) => ({ text: pct(s.fundamentals?.profitMargin) })),
+    rawValues: stocks.map((s) => s.fundamentals?.profitMargin ?? null),
+    higherIsBetter: true,
   });
 
   rows.push({
@@ -108,6 +165,11 @@ export default function ComparisonTable({ stocks, colors }: ComparisonTableProps
       const sym = cur === "BRL" ? "R$" : "$";
       return { text: total > 0 ? `${sym}${total.toFixed(2)}` : "—" };
     }),
+    rawValues: stocks.map((s) => {
+      const total = s.dividends.reduce((sum, d) => sum + d.amount, 0);
+      return total > 0 ? total : null;
+    }),
+    higherIsBetter: true,
   });
 
   return (
@@ -134,19 +196,29 @@ export default function ComparisonTable({ stocks, colors }: ComparisonTableProps
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-800/50">
-            {rows.map((row) => (
-              <tr key={row.label}>
-                <td className="py-1.5 pr-4 text-gray-500">{row.label}</td>
-                {row.values.map((v, i) => (
-                  <td
-                    key={i}
-                    className={`py-1.5 px-3 text-right font-medium ${v.className ?? "text-gray-200"}`}
-                  >
-                    {v.text}
-                  </td>
-                ))}
-              </tr>
-            ))}
+            {rows.map((row) => {
+              const bestSet = highlightBest
+                ? getBestIndices(row.rawValues, row.higherIsBetter)
+                : new Set<number>();
+              return (
+                <tr key={row.label}>
+                  <td className="py-1.5 pr-4 text-gray-500">{row.label}</td>
+                  {row.values.map((v, i) => {
+                    const isBest = bestSet.has(i);
+                    return (
+                      <td
+                        key={i}
+                        className={`py-1.5 px-3 text-right font-medium ${v.className ?? "text-gray-200"} ${
+                          isBest ? "bg-emerald-500/10 text-emerald-400 rounded" : ""
+                        }`}
+                      >
+                        {v.text}
+                      </td>
+                    );
+                  })}
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>

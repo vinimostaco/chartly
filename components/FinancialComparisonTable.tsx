@@ -5,6 +5,7 @@ import { StockData, AnnualFinancials } from "@/types/finance";
 interface FinancialComparisonTableProps {
   stocks: StockData[];
   colors: string[];
+  highlightBest?: boolean;
 }
 
 function fmt(n: number | null | undefined, currency: string): string {
@@ -85,7 +86,33 @@ function bestPerformer(row: MetricRow, stocks: StockData[]): string {
   return `${ticker} ${qualifier}`;
 }
 
-export default function FinancialComparisonTable({ stocks, colors }: FinancialComparisonTableProps) {
+function getBestIndices(
+  rawValues: (number | null | undefined)[],
+  higherIsBetter: boolean
+): Set<number> {
+  const best = new Set<number>();
+  let bestVal: number | null = null;
+
+  for (let i = 0; i < rawValues.length; i++) {
+    const v = rawValues[i];
+    if (v === null || v === undefined) continue;
+    if (bestVal === null) {
+      bestVal = v;
+      best.clear();
+      best.add(i);
+    } else if (v === bestVal) {
+      best.add(i);
+    } else if (higherIsBetter ? v > bestVal : v < bestVal) {
+      bestVal = v;
+      best.clear();
+      best.add(i);
+    }
+  }
+
+  return best;
+}
+
+export default function FinancialComparisonTable({ stocks, colors, highlightBest = false }: FinancialComparisonTableProps) {
   if (stocks.length < 2) return null;
 
   const sections: { title: string; rows: MetricRow[] }[] = [
@@ -212,6 +239,7 @@ export default function FinancialComparisonTable({ stocks, colors }: FinancialCo
                 title={section.title}
                 rows={section.rows}
                 stocks={stocks}
+                highlightBest={highlightBest}
               />
             ))}
           </tbody>
@@ -225,10 +253,12 @@ function SectionBlock({
   title,
   rows,
   stocks,
+  highlightBest,
 }: {
   title: string;
   rows: MetricRow[];
   stocks: StockData[];
+  highlightBest: boolean;
 }) {
   return (
     <>
@@ -242,15 +272,21 @@ function SectionBlock({
       </tr>
       {rows.map((row) => {
         const best = bestPerformer(row, stocks);
+        const bestSet = highlightBest
+          ? getBestIndices(row.values, row.higherIsBetter)
+          : new Set<number>();
         return (
           <tr key={row.label} className="border-t border-gray-800/50">
             <td className="py-1.5 pr-4 text-gray-500">{row.label}</td>
             {row.values.map((v, i) => {
               const colorClass = row.colorFn?.(v);
+              const isBest = bestSet.has(i);
               return (
                 <td
                   key={i}
-                  className={`py-1.5 px-3 text-right font-medium ${colorClass ?? "text-gray-200"}`}
+                  className={`py-1.5 px-3 text-right font-medium ${colorClass ?? "text-gray-200"} ${
+                    isBest ? "bg-emerald-500/10 text-emerald-400 rounded" : ""
+                  }`}
                 >
                   {row.format(v, stocks[i])}
                 </td>
