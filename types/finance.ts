@@ -17,17 +17,36 @@ export interface AnnualFinancials {
   totalRevenue: number | null;
   netIncome: number | null;
   basicEPS: number | null;
+  freeCashFlow: number | null;
+  dividendPerShare: number | null;
+  operatingCashFlow: number | null;
 }
 
 export interface FundamentalsData {
+  // Row 1 (existing)
   marketCap: number | null;
   trailingPE: number | null;
   trailingEPS: number | null;
   totalRevenue: number | null;
   netIncome: number | null;
   profitMargin: number | null;
+  // Row 2 (new)
+  freeCashFlow: number | null;
+  operatingCashFlow: number | null;
+  returnOnEquity: number | null;
+  totalDebt: number | null;
+  netDebt: number | null;
+  debtToEquity: number | null;
+  bookValue: number | null;
+  priceToBook: number | null;
+  sharesOutstanding: number | null;
+  dividendRate: number | null;
+  dividendYield: number | null;
+  payoutRatio: number | null;
+
   currency: string;
   annualFinancials: AnnualFinancials[];
+  quarterlyFinancials: AnnualFinancials[];
 }
 
 export interface StockData {

@@ -97,6 +97,16 @@ export default function FinancialDetails({ data }: FinancialDetailsProps) {
               <Row label="Revenue" value={formatCurrency(f.totalRevenue, currency)} />
               <Row label="Net Income" value={formatCurrency(f.netIncome, currency)} />
               <Row label="Profit Margin" value={formatPercent(f.profitMargin)} />
+              <Row label="Free Cash Flow" value={formatCurrency(f.freeCashFlow, currency)} />
+              <Row label="Operating CF" value={formatCurrency(f.operatingCashFlow, currency)} />
+              <Row label="ROE" value={formatPercent(f.returnOnEquity)} />
+              <Row label="Total Debt" value={formatCurrency(f.totalDebt, currency)} />
+              <Row label="Net Debt" value={formatCurrency(f.netDebt, currency)} />
+              <Row label="Debt/Equity" value={f.debtToEquity !== null ? f.debtToEquity.toFixed(2) : "—"} />
+              <Row label="Book Value" value={formatNumber(f.bookValue)} />
+              <Row label="P/B" value={formatNumber(f.priceToBook)} />
+              <Row label="Dividend Yield" value={formatPercent(f.dividendYield)} />
+              <Row label="Payout Ratio" value={formatPercent(f.payoutRatio)} />
             </tbody>
           </table>
         </div>
@@ -116,6 +126,8 @@ export default function FinancialDetails({ data }: FinancialDetailsProps) {
                   <th className="pb-2 pr-4 font-medium text-right">Revenue</th>
                   <th className="pb-2 pr-4 font-medium text-right">Net Income</th>
                   <th className="pb-2 pr-4 font-medium text-right">EPS</th>
+                  <th className="pb-2 pr-4 font-medium text-right">FCF</th>
+                  <th className="pb-2 pr-4 font-medium text-right">DPS</th>
                   <th className="pb-2 font-medium text-right">Margin</th>
                 </tr>
               </thead>
@@ -144,6 +156,12 @@ export default function FinancialDetails({ data }: FinancialDetailsProps) {
                       </td>
                       <td className="py-1.5 pr-4 text-right">
                         {formatNumber(af.basicEPS)}
+                      </td>
+                      <td className={`py-1.5 pr-4 text-right ${af.freeCashFlow !== null && af.freeCashFlow < 0 ? "text-red-400" : ""}`}>
+                        {formatCurrency(af.freeCashFlow, currency)}
+                      </td>
+                      <td className="py-1.5 pr-4 text-right">
+                        {af.dividendPerShare !== null ? formatNumber(af.dividendPerShare) : "—"}
                       </td>
                       <td className="py-1.5 text-right">
                         {margin !== null ? `${margin.toFixed(1)}%` : "—"}

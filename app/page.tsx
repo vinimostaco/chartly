@@ -14,6 +14,10 @@ import FundamentalsCard from "@/components/FundamentalsCard";
 import EarningsChart from "@/components/EarningsChart";
 import FinancialDetails from "@/components/FinancialDetails";
 import ComparisonTable from "@/components/ComparisonTable";
+import GrowthMetrics from "@/components/GrowthMetrics";
+import DividendHistoryChart from "@/components/DividendHistoryChart";
+import PERatioHistoryChart from "@/components/PERatioHistoryChart";
+import FinancialComparisonTable from "@/components/FinancialComparisonTable";
 
 const SERIES_COLORS = [
   "#3b82f6", // blue
@@ -192,19 +196,27 @@ export default function Home() {
 
             {/* Comparison mode */}
             {isComparing && (
-              <ComparisonTable
-                stocks={stocks}
-                colors={stocks.map((_, i) => SERIES_COLORS[i % SERIES_COLORS.length])}
-              />
+              <>
+                <ComparisonTable
+                  stocks={stocks}
+                  colors={stocks.map((_, i) => SERIES_COLORS[i % SERIES_COLORS.length])}
+                />
+                <FinancialComparisonTable
+                  stocks={stocks}
+                  colors={stocks.map((_, i) => SERIES_COLORS[i % SERIES_COLORS.length])}
+                />
+              </>
             )}
 
             {/* Single stock details */}
             {!isComparing && primaryStock && (
               <>
-                {primaryStock.fundamentals?.annualFinancials &&
-                  primaryStock.fundamentals.annualFinancials.length > 0 && (
+                {primaryStock.fundamentals &&
+                  (primaryStock.fundamentals.annualFinancials.length > 0 ||
+                    primaryStock.fundamentals.quarterlyFinancials.length > 0) && (
                     <EarningsChart
-                      data={primaryStock.fundamentals.annualFinancials}
+                      annualData={primaryStock.fundamentals.annualFinancials}
+                      quarterlyData={primaryStock.fundamentals.quarterlyFinancials}
                       currency={primaryStock.fundamentals.currency}
                     />
                   )}
@@ -212,7 +224,24 @@ export default function Home() {
                 <FinancialDetails data={primaryStock} />
 
                 {primaryStock.fundamentals && (
-                  <FundamentalsCard fundamentals={primaryStock.fundamentals} />
+                  <>
+                    <FundamentalsCard fundamentals={primaryStock.fundamentals} />
+
+                    {primaryStock.fundamentals.annualFinancials.length >= 2 && (
+                      <GrowthMetrics annualData={primaryStock.fundamentals.annualFinancials} />
+                    )}
+
+                    <DividendHistoryChart
+                      annualData={primaryStock.fundamentals.annualFinancials}
+                      fundamentals={primaryStock.fundamentals}
+                    />
+
+                    <PERatioHistoryChart
+                      annualData={primaryStock.fundamentals.annualFinancials}
+                      historical={primaryStock.historical}
+                      currentPE={primaryStock.fundamentals.trailingPE}
+                    />
+                  </>
                 )}
               </>
             )}

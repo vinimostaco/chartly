@@ -1,12 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import YahooFinance from "yahoo-finance2";
-import { StockData, Timeframe, FundamentalsData } from "@/types/finance";
+import { StockData, Timeframe, FundamentalsData, AnnualFinancials } from "@/types/finance";
 
 export const runtime = "nodejs";
 
 const yahooFinance = new YahooFinance();
 
-// Brazilian tickers: 4 letters + 1-2 digits + optional F (e.g. WEGE3, PETR4, BBDC11, VALE3F)
 function resolveYahooTicker(ticker: string): string {
   const upper = ticker.toUpperCase();
   if (/^[A-Z]{4}\d{1,2}F?$/.test(upper)) {
@@ -31,6 +30,27 @@ function getStartDate(period: Timeframe): Date {
   }
 }
 
+function extractFinancials(entries: unknown[]): AnnualFinancials[] {
+  return entries
+    .filter((f) => {
+      const r = f as Record<string, unknown>;
+      return "totalRevenue" in r || "netIncome" in r;
+    })
+    .map((f) => {
+      const r = f as Record<string, unknown>;
+      return {
+        date: new Date(r.date as Date).toISOString().split("T")[0],
+        totalRevenue: (r.totalRevenue as number) ?? null,
+        netIncome: (r.netIncome as number) ?? null,
+        basicEPS: (r.basicEPS as number) ?? null,
+        freeCashFlow: (r.freeCashFlow as number) ?? null,
+        dividendPerShare: (r.dividendPerShare as number) ?? null,
+        operatingCashFlow: (r.operatingCashFlow as number) ?? null,
+      };
+    })
+    .sort((a, b) => a.date.localeCompare(b.date));
+}
+
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ ticker: string }> }
@@ -43,31 +63,37 @@ export async function GET(
     const startDate = getStartDate(period);
 
     // Fetch chart data and fundamentals in parallel
-    const [chartResult, summaryResult, financialsResult] = await Promise.allSettled([
-      yahooFinance.chart(yahooTicker, {
-        period1: startDate,
-        period2: new Date(),
-        interval: "1d",
-        events: "div",
-      }),
-      yahooFinance.quoteSummary(yahooTicker, {
-        modules: ["financialData", "defaultKeyStatistics", "summaryDetail"],
-      }),
-      yahooFinance.fundamentalsTimeSeries(yahooTicker, {
-        period1: new Date(new Date().getFullYear() - 10, 0, 1),
-        type: "annual",
-        module: "financials",
-      }),
-    ]);
+    // Use module: "all" to get financials + balance sheet + cash flow in one call
+    const [chartResult, summaryResult, annualAllResult, quarterlyAllResult] =
+      await Promise.allSettled([
+        yahooFinance.chart(yahooTicker, {
+          period1: startDate,
+          period2: new Date(),
+          interval: "1d",
+          events: "div",
+        }),
+        yahooFinance.quoteSummary(yahooTicker, {
+          modules: ["financialData", "defaultKeyStatistics", "summaryDetail"],
+        }),
+        yahooFinance.fundamentalsTimeSeries(yahooTicker, {
+          period1: new Date(new Date().getFullYear() - 10, 0, 1),
+          type: "annual",
+          module: "all",
+        }),
+        yahooFinance.fundamentalsTimeSeries(yahooTicker, {
+          period1: new Date(new Date().getFullYear() - 5, 0, 1),
+          type: "quarterly",
+          module: "all",
+        }),
+      ]);
 
-    // Chart data is required
     if (chartResult.status === "rejected") {
       throw chartResult.reason;
     }
 
     const result = chartResult.value;
 
-    // Deduplicate by date (keep last entry per date) and sort ascending
+    // Deduplicate historical by date
     const historicalMap = new Map<string, StockData["historical"][0]>();
     for (const q of result.quotes || []) {
       const date = new Date(q.date).toISOString().split("T")[0];
@@ -84,7 +110,7 @@ export async function GET(
       (a, b) => a.date.localeCompare(b.date)
     );
 
-    // Deduplicate dividends by date (sum amounts if multiple on same date)
+    // Deduplicate dividends
     const dividendMap = new Map<string, number>();
     for (const d of result.events?.dividends || []) {
       const date = new Date(d.date).toISOString().split("T")[0];
@@ -94,7 +120,7 @@ export async function GET(
       .map(([date, amount]) => ({ date, amount }))
       .sort((a, b) => a.date.localeCompare(b.date));
 
-    // Build fundamentals (optional — graceful degradation)
+    // Build fundamentals
     let fundamentals: FundamentalsData | undefined;
 
     if (summaryResult.status === "fulfilled") {
@@ -104,27 +130,47 @@ export async function GET(
       const sd = summary.summaryDetail;
 
       const annualFinancials =
-        financialsResult.status === "fulfilled"
-          ? financialsResult.value
-              .filter((f) => "totalRevenue" in f || "netIncome" in f)
-              .map((f) => ({
-                date: new Date(f.date).toISOString().split("T")[0],
-                totalRevenue: ("totalRevenue" in f ? (f.totalRevenue as number) : null) ?? null,
-                netIncome: ("netIncome" in f ? (f.netIncome as number) : null) ?? null,
-                basicEPS: ("basicEPS" in f ? (f.basicEPS as number) : null) ?? null,
-              }))
-              .sort((a, b) => a.date.localeCompare(b.date))
+        annualAllResult.status === "fulfilled"
+          ? extractFinancials(annualAllResult.value)
           : [];
 
+      const quarterlyFinancials =
+        quarterlyAllResult.status === "fulfilled"
+          ? extractFinancials(quarterlyAllResult.value)
+          : [];
+
+      const totalCash = fd?.totalCash ?? null;
+      const totalDebt = fd?.totalDebt ?? null;
+      const netDebt =
+        totalDebt !== null && totalCash !== null
+          ? totalDebt - totalCash
+          : null;
+
       fundamentals = {
+        // Row 1
         marketCap: sd?.marketCap ?? null,
         trailingPE: sd?.trailingPE ?? null,
         trailingEPS: dks?.trailingEps ?? null,
         totalRevenue: fd?.totalRevenue ?? null,
         netIncome: dks?.netIncomeToCommon ?? null,
         profitMargin: fd?.profitMargins ?? null,
+        // Row 2
+        freeCashFlow: fd?.freeCashflow ?? null,
+        operatingCashFlow: fd?.operatingCashflow ?? null,
+        returnOnEquity: fd?.returnOnEquity ?? null,
+        totalDebt,
+        netDebt,
+        debtToEquity: fd?.debtToEquity ?? null,
+        bookValue: dks?.bookValue ?? null,
+        priceToBook: dks?.priceToBook ?? null,
+        sharesOutstanding: dks?.sharesOutstanding ?? null,
+        dividendRate: sd?.dividendRate ?? null,
+        dividendYield: sd?.dividendYield ?? null,
+        payoutRatio: sd?.payoutRatio ?? null,
+
         currency: fd?.financialCurrency ?? sd?.currency ?? "USD",
         annualFinancials,
+        quarterlyFinancials,
       };
     }
 
